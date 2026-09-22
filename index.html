@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FNB48S Power Meter — Live Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f6f9; --bg-elevated:#ffffff; --bg-card:#ffffff;
+  --text:#141a23; --text-dim:#5b6675; --border:#e1e6ed;
+  --accent:#2563eb; --accent-dim:#dbe6fd;
+  --success:#16a34a; --warning:#d97706; --danger:#dc2626;
+  --volt:#2563eb; --amp:#d97706; --watt:#16a34a;
+  --dp:#db2777; --dn:#7c3aed; --temp:#e11d48; --battpct:#0d9488;
+  --shadow:0 1px 2px rgba(20,26,35,.06),0 1px 8px rgba(20,26,35,.04);
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1117; --bg-elevated:#151b23; --bg-card:#151b23;
+    --text:#e6edf3; --text-dim:#8b98a8; --border:#25303d;
+    --accent:#5b9bff; --accent-dim:#132445;
+    --success:#3ddc84; --warning:#f5a742; --danger:#ff6b6b;
+    --volt:#5b9bff; --amp:#fbbf24; --watt:#34d399;
+    --dp:#f472b6; --dn:#c084fc; --temp:#fb7185; --battpct:#2dd4bf;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 12px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --bg-elevated:#151b23; --bg-card:#151b23;
+  --text:#e6edf3; --text-dim:#8b98a8; --border:#25303d;
+  --accent:#5b9bff; --accent-dim:#132445;
+  --success:#3ddc84; --warning:#f5a742; --danger:#ff6b6b;
+  --volt:#5b9bff; --amp:#fbbf24; --watt:#34d399;
+  --dp:#f472b6; --dn:#c084fc; --temp:#fb7185; --battpct:#2dd4bf;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 12px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.5; padding-bottom:60px;
+}
+a{color:var(--accent);}
+.wrap{max-width:1180px; margin:0 auto; padding:0 20px;}
+
+/* Header */
+header.top{
+  border-bottom:1px solid var(--border); background:var(--bg-elevated);
+  position:sticky; top:0; z-index:20;
+}
+.top-inner{display:flex; align-items:center; gap:16px; padding:14px 20px; flex-wrap:wrap;}
+.brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px;}
+.brand .logo{font-size:22px;}
+.brand small{display:block; font-weight:400; font-size:12px; color:var(--text-dim);}
+.spacer{flex:1;}
+.status-pill{
+  display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px;
+  font-size:13px; font-weight:600; border:1px solid var(--border); background:var(--bg-card);
+}
+.status-dot{width:8px; height:8px; border-radius:50%; background:var(--text-dim);}
+.status-pill.connected .status-dot{background:var(--success); box-shadow:0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);}
+.status-pill.connecting .status-dot{background:var(--warning);}
+.status-pill.error .status-dot{background:var(--danger);}
+button{
+  font:inherit; cursor:pointer; border:1px solid var(--border); background:var(--bg-card);
+  color:var(--text); padding:9px 16px; border-radius:8px; font-weight:600; font-size:13px;
+  transition:.15s;
+}
+button:hover{border-color:var(--accent); color:var(--accent);}
+button:disabled{opacity:.45; cursor:not-allowed;}
+button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+button.primary:hover{filter:brightness(1.08); color:#fff;}
+button.danger:hover{border-color:var(--danger); color:var(--danger);}
+button.small{padding:6px 10px; font-size:12px;}
+
+/* Banner */
+.banner{
+  margin:16px 0; padding:12px 16px; border-radius:10px; font-size:13.5px;
+  border:1px solid var(--border); display:none; gap:10px; align-items:flex-start;
+}
+.banner.show{display:flex;}
+.banner.warn{background:color-mix(in srgb, var(--warning) 12%, var(--bg-card)); border-color:var(--warning);}
+.banner.err{background:color-mix(in srgb, var(--danger) 12%, var(--bg-card)); border-color:var(--danger);}
+.banner.info{background:var(--accent-dim); border-color:var(--accent);}
+.banner b{display:block; margin-bottom:2px;}
+
+/* Cards / grid */
+.section{margin-top:26px;}
+.section h2{font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px;}
+.section h2 .hint{font-weight:400; font-size:12px; color:var(--text-dim);}
+.card{
+  background:var(--bg-card); border:1px solid var(--border); border-radius:12px;
+  box-shadow:var(--shadow);
+}
+.metrics-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:12px;}
+@media (max-width:900px){.metrics-grid{grid-template-columns:repeat(3,1fr);}}
+@media (max-width:520px){.metrics-grid{grid-template-columns:repeat(2,1fr);}}
+.metric{padding:16px; text-align:left;}
+.metric .label{font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim); font-weight:700; display:flex; align-items:center; gap:6px;}
+.metric .swatch{width:8px; height:8px; border-radius:2px; display:inline-block;}
+.metric .value{font-size:26px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums;}
+.metric .value .unit{font-size:14px; font-weight:600; color:var(--text-dim); margin-left:3px;}
+.metric .sub{font-size:11.5px; color:var(--text-dim); margin-top:3px;}
+
+.session-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;}
+
+.limit-inputs{margin-left:auto; display:flex; align-items:center; gap:14px; font-weight:400; font-size:12px; color:var(--text-dim); flex-wrap:wrap;}
+.limit-inputs label{display:flex; align-items:center; gap:5px;}
+.limit-inputs input{
+  width:58px; font:inherit; padding:4px 6px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg-card); color:var(--text);
+}
+.preset-row{display:flex; gap:4px;}
+.preset-row button{padding:4px 8px; font-size:11px;}
+.metric.alert{outline:2px solid var(--danger); outline-offset:-2px; border-radius:12px;}
+.metric.alert .value{color:var(--danger);}
+
+.text-input{
+  font:inherit; padding:8px 10px; border:1px solid var(--border); border-radius:8px;
+  background:var(--bg-card); color:var(--text);
+}
+button.danger{background:var(--danger); border-color:var(--danger); color:#fff;}
+button.danger:hover{filter:brightness(1.08); color:#fff;}
+
+/* Battery test */
+.batt-row{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
+.batt-icon-wrap{display:flex; flex-direction:column; align-items:center; gap:8px;}
+.batt-icon{
+  width:52px; height:92px; border:3px solid var(--text-dim); border-radius:8px; position:relative;
+  overflow:hidden; background:var(--bg);
+}
+.batt-icon::before{
+  content:''; position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+  width:18px; height:7px; background:var(--text-dim); border-radius:3px 3px 0 0;
+}
+.batt-fill{position:absolute; bottom:0; left:0; width:100%; background:var(--success); transition:height .5s ease;}
+.batt-pct{font-weight:700; font-size:15px; font-variant-numeric:tabular-nums;}
+.batt-fields{flex:1; min-width:220px;}
+.batt-fields label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim); font-weight:700; max-width:180px; text-transform:uppercase; letter-spacing:.03em; font-size:11px;}
+.batt-fields input{font:inherit; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text); margin-top:2px; width:160px; font-size:14px; text-transform:none;}
+.batt-stats{display:flex; gap:26px; margin-top:16px; flex-wrap:wrap;}
+.batt-stats div{display:flex; flex-direction:column;}
+.batt-stats b{font-size:17px; font-variant-numeric:tabular-nums;}
+.batt-stats span{font-size:11px; color:var(--text-dim);}
+
+/* Protocol badge */
+.proto-badge{
+  display:flex; align-items:center; justify-content:center; gap:8px; font-size:16px; font-weight:700;
+  margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--border);
+}
+.proto-dot{width:9px; height:9px; border-radius:50%; background:var(--text-dim); flex-shrink:0;}
+.proto-dot.locked{background:var(--success); box-shadow:0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent);}
+
+/* Recordings table */
+#recTable td, #recTable th{white-space:nowrap;}
+#recTable td:first-child{white-space:normal; font-weight:600;}
+#recTable button{padding:4px 9px; font-size:11.5px;}
+
+/* Chart */
+.chart-card{padding:16px;}
+.chart-toolbar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px;}
+.legend{display:flex; gap:14px; flex-wrap:wrap;}
+.legend label{display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none;}
+.legend input{accent-color:var(--accent);}
+.legend .sw{width:10px; height:10px; border-radius:3px;}
+.legend .rng{font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums; margin-left:-2px;}
+.seg{display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+.seg button{border:none; border-radius:0; background:transparent; padding:6px 11px; font-size:12px;}
+.seg button.active{background:var(--accent); color:#fff;}
+.chart-area{position:relative; padding-left:34px; padding-bottom:20px;}
+canvas#chart{width:100%; height:260px; display:block; cursor:crosshair;}
+.chart-axis-y{
+  position:absolute; left:0; top:0; width:32px; height:260px;
+  display:flex; flex-direction:column; justify-content:space-between;
+  font-size:10px; color:var(--text-dim); text-align:right; padding:2px 4px 2px 0;
+  font-variant-numeric:tabular-nums; pointer-events:none;
+}
+.chart-axis-x{
+  position:absolute; left:34px; right:0; bottom:0; height:18px;
+  display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-dim);
+  pointer-events:none;
+}
+.chart-tooltip{
+  position:absolute; top:8px; pointer-events:none; background:var(--bg-elevated);
+  border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12px;
+  box-shadow:var(--shadow); display:none; white-space:nowrap; z-index:5;
+}
+.chart-tooltip .tt-row{display:flex; align-items:center; gap:6px; margin-top:2px;}
+.chart-tooltip .tt-row .sw{width:8px; height:8px; border-radius:2px; display:inline-block;}
+.chart-tooltip .tt-time{color:var(--text-dim); font-size:11px; margin-bottom:3px;}
+.chart-empty{
+  height:260px; display:flex; align-items:center; justify-content:center;
+  color:var(--text-dim); font-size:13px; text-align:center; flex-direction:column; gap:6px;
+}
+.marker-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;}
+.marker-chip{
+  display:flex; align-items:center; gap:6px; font-size:11.5px; padding:4px 8px; border-radius:999px;
+  background:var(--accent-dim); border:1px solid var(--accent);
+}
+.marker-chip button{border:none; background:none; padding:0; font-size:12px; color:var(--text-dim); cursor:pointer;}
+.raw-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:10.5px; margin-top:10px;}
+.raw-table th, .raw-table td{padding:3px 7px; text-align:right; border-bottom:1px solid var(--border);}
+.raw-table th{color:var(--text-dim); font-weight:600;}
+.raw-table td:first-child, .raw-table th:first-child{text-align:left;}
+
+/* Protocol panel */
+.proto-wrap{display:grid; grid-template-columns:220px 1fr; gap:16px;}
+@media (max-width:760px){.proto-wrap{grid-template-columns:1fr;}}
+.proto-live{padding:16px; text-align:center;}
+.proto-live .rd{font-size:12px; color:var(--text-dim); font-weight:700; letter-spacing:.03em; text-transform:uppercase;}
+.proto-live .rv{font-size:20px; font-weight:700; margin:4px 0 10px;}
+.proto-match{margin-top:10px; padding:10px; border-radius:8px; background:var(--accent-dim); font-size:13px;}
+.proto-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+.proto-table th, .proto-table td{padding:7px 10px; border-bottom:1px solid var(--border); text-align:left;}
+.proto-table th{color:var(--text-dim); font-weight:700; font-size:11px; text-transform:uppercase;}
+.proto-table tr.match{background:var(--accent-dim);}
+
+/* Debug */
+details{background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
+details summary{cursor:pointer; font-weight:700; font-size:13.5px;}
+.debug-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 20px; font-size:12.5px; margin-top:12px;}
+.debug-grid div b{color:var(--text-dim); font-weight:600;}
+pre.hex{
+  background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px;
+  font-family:var(--mono); font-size:11px; overflow-x:auto; margin-top:10px; line-height:1.6;
+}
+
+/* Docs */
+.docs{padding:22px 24px;}
+.docs h3{font-size:15px; margin:22px 0 8px;}
+.docs h3:first-child{margin-top:0;}
+.docs p, .docs li{font-size:13.5px; color:var(--text-dim); line-height:1.65;}
+.docs table{width:100%; border-collapse:collapse; font-size:12.5px; margin:10px 0;}
+.docs th, .docs td{padding:6px 10px; border-bottom:1px solid var(--border); text-align:left;}
+.docs th{color:var(--text-dim); text-transform:uppercase; font-size:10.5px;}
+.docs code{background:var(--bg); border:1px solid var(--border); padding:1px 5px; border-radius:4px; font-family:var(--mono); font-size:12px;}
+.docs .kbd{border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-family:var(--mono); font-size:11.5px;}
+footer{text-align:center; font-size:12px; color:var(--text-dim); margin-top:30px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <div>FNB48S Power Meter <small>Live web dashboard · WebHID</small></div>
+    </div>
+    <div class="spacer"></div>
+    <span id="wakeLockPill" class="status-pill" style="display:none" title="Screen won't sleep while connected">🔒 Awake</span>
+    <button id="btnTheme" class="small" title="Toggle light/dark theme">🌓</button>
+    <span id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">Disconnected</span></span>
+    <button id="btnConnect" class="primary">Connect device</button>
+    <button id="btnDisconnect" style="display:none">Disconnect</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="bannerUnsupported" class="banner err">
+    <div>
+      <b>WebHID not available in this browser</b>
+      Open this file in desktop <b>Chrome</b> or <b>Edge</b> (Windows/macOS/Linux). Firefox and Safari do not support WebHID yet.
+    </div>
+  </div>
+
+  <div id="bannerBusy" class="banner warn">
+    <div>
+      <b>Device may be in use by another app</b>
+      Most HID meters only allow one connection at a time. If the picker doesn't list your FNB48S, or opening it fails, close <code>UsbMeter.exe</code> (and any other FNIRSI app) first, then try again.
+    </div>
+  </div>
+
+  <div id="bannerError" class="banner err"><div><b id="bannerErrorTitle">Error</b><span id="bannerErrorMsg"></span></div></div>
+
+  <!-- Live metrics -->
+  <div class="section">
+    <h2>Live readings <span class="hint" id="rateHint">— waiting for data…</span>
+      <span class="limit-inputs">
+        <label>Alert if V &gt; <input type="number" id="limitV" step="0.1" placeholder="off"></label>
+        <label>Alert if A &gt; <input type="number" id="limitA" step="0.1" placeholder="off"></label>
+        <span class="preset-row" id="presetRow">
+          <button class="small" data-limitv="5">5V</button>
+          <button class="small" data-limitv="9">9V</button>
+          <button class="small" data-limitv="12">12V</button>
+          <button class="small" data-limitv="20">20V</button>
+          <button class="small" data-limita="0.5">0.5A</button>
+          <button class="small" data-limita="1.5">1.5A</button>
+          <button class="small" data-limita="3">3A</button>
+          <button class="small" data-limita="5">5A</button>
+          <button class="small" id="btnClearLimits" title="Clear alert thresholds">✕</button>
+        </span>
+      </span>
+    </h2>
+    <div class="metrics-grid card" style="display:grid; box-shadow:var(--shadow);">
+      <div class="metric" id="tileVolt"><div class="label"><span class="swatch" style="background:var(--volt)"></span>Voltage</div><div class="value" id="mVolt">–<span class="unit">V</span></div><div class="sub" id="mVoltSub">&nbsp;</div></div>
+      <div class="metric" id="tileAmp"><div class="label"><span class="swatch" style="background:var(--amp)"></span>Current</div><div class="value" id="mAmp">–<span class="unit">A</span></div><div class="sub" id="mAmpSub">&nbsp;</div></div>
+      <div class="metric"><div class="label"><span class="swatch" style="background:var(--watt)"></span>Power</div><div class="value" id="mWatt">–<span class="unit">W</span></div><div class="sub" id="mWattSub">&nbsp;</div></div>
+      <div class="metric"><div class="label"><span class="swatch" style="background:var(--dp)"></span>D+</div><div class="value" id="mDp">–<span class="unit">V</span></div><div class="sub">Data line +</div></div>
+      <div class="metric"><div class="label"><span class="swatch" style="background:var(--dn)"></span>D-</div><div class="value" id="mDn">–<span class="unit">V</span></div><div class="sub">Data line −</div></div>
+      <div class="metric"><div class="label"><span class="swatch" style="background:var(--temp)"></span>Temp</div><div class="value" id="mTemp">–<span class="unit">°C</span></div><div class="sub">Internal sensor</div></div>
+    </div>
+  </div>
+
+  <!-- Session -->
+  <div class="section">
+    <h2>Session <span class="hint">since connect, or since last reset</span></h2>
+    <div class="session-grid">
+      <div class="card metric"><div class="label">Capacity</div><div class="value" id="sCap">0<span class="unit">mAh</span></div></div>
+      <div class="card metric"><div class="label">Energy</div><div class="value" id="sEnergy">0<span class="unit">mWh</span></div></div>
+      <div class="card metric"><div class="label">Avg / Peak power</div><div class="value" id="sAvgPk" style="font-size:20px">– / –<span class="unit">W</span></div></div>
+      <div class="card metric"><div class="label">Duration / Samples</div><div class="value" id="sDur" style="font-size:20px">00:00</div><div class="sub" id="sSamples">0 samples</div></div>
+      <div class="card metric"><div class="label">Voltage range</div><div class="value" id="sVRange" style="font-size:20px">– / –<span class="unit">V</span></div></div>
+      <div class="card metric"><div class="label">Current range</div><div class="value" id="sARange" style="font-size:20px">– / –<span class="unit">A</span></div></div>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button id="btnReset" class="small">↺ Reset session</button>
+      <button id="btnCsv" class="small" disabled>⬇ Export CSV</button>
+      <button id="btnJson" class="small" disabled>⬇ Export JSON</button>
+      <button id="btnPng" class="small" disabled>⬇ Export chart PNG</button>
+      <span class="hint" style="align-self:center;">Shortcuts: <span class="kbd" style="padding:1px 5px; border:1px solid var(--border); border-bottom-width:2px; border-radius:4px; font-family:var(--mono); font-size:11px;">Space</span> record · <span class="kbd" style="padding:1px 5px; border:1px solid var(--border); border-bottom-width:2px; border-radius:4px; font-family:var(--mono); font-size:11px;">M</span> marker · <span class="kbd" style="padding:1px 5px; border:1px solid var(--border); border-bottom-width:2px; border-radius:4px; font-family:var(--mono); font-size:11px;">R</span> reset</span>
+    </div>
+  </div>
+
+  <!-- Battery capacity test -->
+  <div class="section">
+    <h2>Battery / capacity test <span class="hint">estimate % charged and time remaining toward a target capacity</span></h2>
+    <div class="card" style="padding:18px 20px;">
+      <div class="batt-row">
+        <div class="batt-icon-wrap">
+          <div class="batt-icon"><div class="batt-fill" id="battFill" style="height:0%"></div></div>
+          <div class="batt-pct" id="battPct">–</div>
+        </div>
+        <div class="batt-fields">
+          <div style="display:flex; gap:14px; flex-wrap:wrap;">
+            <label>Target capacity (mAh)
+              <input type="number" id="battTarget" placeholder="e.g. 500" min="0" step="50">
+            </label>
+            <label>Expected charge current (mA)
+              <input type="number" id="battExpectedMa" placeholder="e.g. 200" min="0" step="10">
+            </label>
+          </div>
+          <div class="batt-stats">
+            <div><b id="battRemaining">–</b><span>remaining</span></div>
+            <div><b id="battEta">–</b><span>time to full (live rate)</span></div>
+            <div><b id="battRate">–</b><span>avg charge rate</span></div>
+            <div><b id="battCrate">–</b><span>C-rate</span></div>
+            <div><b id="battNominalEta">–</b><span>nominal est. (from expected mA)</span></div>
+          </div>
+          <div id="battCurrentWarn" class="banner warn" style="margin-top:12px;"></div>
+        </div>
+      </div>
+      <p style="font-size:11.5px; color:var(--text-dim); margin:14px 2px 0;">
+        Based on this session's accumulated capacity (left) and a 10-second rolling average current. The meter
+        cannot read a battery's actual state of charge — this is an estimate from what's flowing through it, not a
+        measurement of the battery itself. Reset the session when you start charging for an accurate estimate.
+      </p>
+    </div>
+  </div>
+
+  <!-- Fast-charge trigger -->
+  <div class="section">
+    <h2>Fast-charge trigger <span class="hint">EXPERIMENTAL — actively requests a voltage change from the charger</span></h2>
+    <div class="card" style="padding:18px 20px;">
+      <div class="banner warn show" style="margin:0 0 16px;">
+        <div>
+          <b>Read this before using</b>
+          This sends a real command asking the connected charger to change its output voltage (up to 20V). It only
+          works if the charger actually supports the selected protocol — plugged into a plain PC port or a
+          non-fast-charge charger, it will simply fail, as it should. But if something voltage-sensitive is
+          connected downstream and the charger <i>does</i> comply, it will see that higher voltage.
+          <b>Unplug anything you're not willing to risk before triggering.</b> Unlike the read-side protocol, this
+          was verified by capturing FNIRSI's own official app with Wireshark/USBPcap and matching its exact bytes —
+          not guessed — but "verified bytes" isn't the same as "risk-free."
+        </div>
+      </div>
+      <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+        <label style="display:flex; flex-direction:column; gap:5px; font-size:11px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.03em;">
+          Protocol
+          <select id="trigProto" class="text-input" style="min-width:170px;">
+            <option value="0">QC 2.0</option>
+            <option value="1">QC 3.0</option>
+            <option value="2">Huawei FCP</option>
+            <option value="3">Huawei SCP</option>
+            <option value="4">Samsung AFC</option>
+          </select>
+        </label>
+        <label style="display:flex; flex-direction:column; gap:5px; font-size:11px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.03em;">
+          Voltage
+          <select id="trigVoltPreset" class="text-input" style="min-width:110px;"></select>
+        </label>
+        <label id="trigCustomWrap" style="display:none; flex-direction:column; gap:5px; font-size:11px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.03em;">
+          Custom V
+          <input type="number" id="trigCustomV" class="text-input" style="width:90px;" min="3.6" max="20" step="0.1" value="9">
+        </label>
+        <button id="btnTrigger" class="danger" disabled>⚡ Send trigger</button>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-size:12.5px; cursor:pointer;">
+        <input type="checkbox" id="trigConfirm">
+        I understand this requests a real voltage change from the charger, and I've checked what's plugged in downstream.
+      </label>
+      <div id="trigLog" style="margin-top:14px; font-family:var(--mono); font-size:11.5px; max-height:160px; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:3px;"></div>
+      <p style="font-size:11.5px; color:var(--text-dim); margin:12px 2px 0;">
+        Verified protocols/IDs: QC2.0=0x00, QC3.0=0x01, Huawei FCP=0x02, Huawei SCP=0x03, Samsung AFC=0x04 (captured
+        directly from FNIRSI's own app). Voltage encoding (little-endian millivolts) was confirmed at two data
+        points (5.00V and 9.00V) and generalized to other voltages on that same confirmed field — same mechanism,
+        not a new guess. There's no explicit "release" command observed yet, so a trigger stays in effect until the
+        charger times it out or you unplug/replug.
+      </p>
+    </div>
+  </div>
+
+  <!-- Session recording -->
+  <div class="section">
+    <h2>Session recording <span class="hint">capture named sessions you can export or review later</span></h2>
+    <div class="card" style="padding:16px 18px;">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <input type="text" id="recName" placeholder="Session name (optional)" class="text-input" style="flex:1; min-width:180px;">
+        <button id="btnRecStart" class="primary">● Start recording</button>
+        <button id="btnRecStop" class="danger" style="display:none">■ Stop recording</button>
+        <span id="recStatus" class="hint"></span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="proto-table" id="recTable" style="margin-top:14px; min-width:820px;">
+          <thead><tr><th>Name</th><th>Started</th><th>Duration</th><th>Samples</th><th>Avg / Peak W</th><th>Capacity</th><th>Energy</th><th>Target</th><th></th></tr></thead>
+          <tbody id="recTableBody"><tr><td colspan="9" style="color:var(--text-dim); text-align:center; padding:16px 0;">No recordings yet.</td></tr></tbody>
+        </table>
+      </div>
+      <p style="font-size:11.5px; color:var(--text-dim); margin:10px 2px 0;">
+        Recordings persist across reloads as a history list, but raw sample data for export is only kept for the
+        current browser tab session — export a recording's CSV or JSON before closing the tab if you'll need the raw
+        data later. A JSON export can be reloaded for replay any time with "Load recording file" below.
+      </p>
+    </div>
+  </div>
+
+  <!-- Replay -->
+  <div class="section">
+    <h2>Replay <span class="hint">play back a recorded session, scrub through it, or step frame by frame</span></h2>
+    <div class="card" id="replayCard" style="padding:18px 20px;">
+      <div id="replayEmpty" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <span class="hint">No recording loaded — click ▶ Replay on a row above, or load a saved file:</span>
+        <input type="file" id="replayFileInput" accept="application/json" class="text-input" style="padding:6px 8px;">
+      </div>
+      <div id="replayActive" style="display:none;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+          <b id="replayName" style="font-size:14px;"></b>
+          <span class="hint" id="replayMeta"></span>
+          <span class="spacer"></span>
+          <button id="btnReplayClose" class="small">✕ Close replay</button>
+        </div>
+
+        <div class="metrics-grid card" style="display:grid; box-shadow:none; border-style:dashed; margin-bottom:14px;">
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--volt)"></span>Voltage</div><div class="value" id="rpVolt">–<span class="unit">V</span></div></div>
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--amp)"></span>Current</div><div class="value" id="rpAmp">–<span class="unit">A</span></div></div>
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--watt)"></span>Power</div><div class="value" id="rpWatt">–<span class="unit">W</span></div></div>
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--dp)"></span>D+</div><div class="value" id="rpDp">–<span class="unit">V</span></div></div>
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--dn)"></span>D-</div><div class="value" id="rpDn">–<span class="unit">V</span></div></div>
+          <div class="metric"><div class="label"><span class="swatch" style="background:var(--temp)"></span>Temp</div><div class="value" id="rpTemp">–<span class="unit">°C</span></div></div>
+        </div>
+
+        <canvas id="replayChart" width="1100" height="180" style="width:100%; height:180px; display:block; border-radius:8px; background:var(--bg);"></canvas>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
+          <button id="btnReplayRestart" class="small" title="Restart from beginning">⏮</button>
+          <button id="btnReplayPlay" class="small primary" style="min-width:70px;">▶ Play</button>
+          <input type="range" id="replaySeek" min="0" max="1000" value="0" style="flex:1; min-width:180px;">
+          <span class="hint" id="replayTime" style="min-width:110px; text-align:right;">0.0s / 0.0s</span>
+          <select id="replaySpeed" class="text-input" style="width:90px;">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="5">5×</option>
+            <option value="20">20×</option>
+            <option value="0">Max</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="section">
+    <h2>Graph</h2>
+    <div class="card chart-card">
+      <div class="chart-toolbar">
+        <div class="legend" id="legend">
+          <label><input type="checkbox" data-series="voltage" checked><span class="sw" style="background:var(--volt)"></span>Voltage<span class="rng" data-rng="voltage"></span></label>
+          <label><input type="checkbox" data-series="current" checked><span class="sw" style="background:var(--amp)"></span>Current<span class="rng" data-rng="current"></span></label>
+          <label><input type="checkbox" data-series="power" checked><span class="sw" style="background:var(--watt)"></span>Power<span class="rng" data-rng="power"></span></label>
+          <label><input type="checkbox" data-series="dp"><span class="sw" style="background:var(--dp)"></span>D+<span class="rng" data-rng="dp"></span></label>
+          <label><input type="checkbox" data-series="dn"><span class="sw" style="background:var(--dn)"></span>D-<span class="rng" data-rng="dn"></span></label>
+        </div>
+        <div class="spacer"></div>
+        <input type="text" id="markerLabel" placeholder="Marker label" class="text-input" style="width:120px; padding:6px 9px; font-size:12px;">
+        <button id="btnMarker" class="small" title="Drop a labeled marker at the current time (M)">📍 Mark</button>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none;">
+          <input type="checkbox" id="smoothToggle" checked><span>Smooth</span>
+        </label>
+        <div class="seg" id="windowSeg">
+          <button data-win="30" >30s</button>
+          <button data-win="60" class="active">60s</button>
+          <button data-win="300">5m</button>
+          <button data-win="0">All</button>
+        </div>
+      </div>
+      <div class="chart-area">
+        <canvas id="chart" width="1100" height="260"></canvas>
+        <div class="chart-axis-y" id="chartAxisY"></div>
+        <div class="chart-axis-x" id="chartAxisX"></div>
+        <div class="chart-tooltip" id="chartTooltip"></div>
+      </div>
+      <div class="chart-empty" id="chartEmpty">
+        <div style="font-size:26px">📈</div>
+        <div>Connect your FNB48S to see live data here.</div>
+      </div>
+      <div id="markerList" class="marker-list"></div>
+    </div>
+  </div>
+
+  <!-- Protocol -->
+  <div class="section">
+    <h2>Charging protocol (D+/D− reference) <span class="hint">heuristic — not an exact decode</span></h2>
+    <div class="proto-wrap">
+      <div class="card proto-live">
+        <div class="proto-badge"><span class="proto-dot" id="protoDot"></span><span id="protoName">Connect to detect</span></div>
+        <div class="rd">D+</div><div class="rv" id="pDp" style="color:var(--dp)">– V</div>
+        <div class="rd">D−</div><div class="rv" id="pDn" style="color:var(--dn)">– V</div>
+        <div class="proto-match" id="pMatch">Connect to see a live match.</div>
+      </div>
+      <div class="card" style="padding:14px 16px; overflow-x:auto;">
+        <table class="proto-table" id="protoTable">
+          <thead><tr><th>Signature</th><th>D+ (V)</th><th>D− (V)</th><th>Typical meaning</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p style="font-size:11.5px; color:var(--text-dim); margin:10px 2px 0;">
+          These are commonly-cited approximate values — real chargers vary by a few tenths of a volt.
+          USB-PD is negotiated over the USB-C <b>CC</b> line, not D+/D−, so a PD-only charger typically reads ~0V/0V here even while delivering PD power — this table cannot detect PD by itself.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug -->
+  <div class="section">
+    <details>
+      <summary>Advanced / raw HID info</summary>
+      <div class="debug-grid">
+        <div><b>Product name</b><div id="dProduct">–</div></div>
+        <div><b>Vendor / Product ID</b><div id="dVidPid">–</div></div>
+        <div><b>Report framing</b><div id="dFraming">–</div></div>
+        <div><b>Reports received</b><div id="dReports">0</div></div>
+        <div><b>Samples parsed</b><div id="dSamplesDbg">0</div></div>
+        <div><b>Effective sample rate</b><div id="dRate">–</div></div>
+      </div>
+      <pre class="hex" id="dHex">No data yet.</pre>
+      <table class="raw-table">
+        <thead><tr><th>t (s)</th><th>V</th><th>A</th><th>W</th><th>D+</th><th>D-</th><th>°C</th></tr></thead>
+        <tbody id="rawTableBody"></tbody>
+      </table>
+    </details>
+  </div>
+
+  <!-- Docs -->
+  <div class="section">
+    <div class="card docs">
+      <h3>About this tool</h3>
+      <p>
+        This is an independent, browser-based dashboard for the FNIRSI FNB48S USB power meter. It talks to the meter
+        directly from Chrome/Edge using the <b>WebHID API</b> — no drivers, no install, and it runs alongside (or instead
+        of) FNIRSI's own <code>UsbMeter.exe</code> desktop app. Everything happens locally in your browser; no data is
+        sent anywhere.
+      </p>
+
+      <h3>Wiring: which port to use</h3>
+      <p>
+        The FNB48S has <b>two separate USB connections</b> and they are easy to mix up:
+      </p>
+      <ul>
+        <li><b>Pass-through ports</b> (the big USB-A input/output) — for measuring: plug a charger into the input and a
+        phone/cable into the output, and the meter reports what flows <i>through</i> it.</li>
+        <li><b>PC-link port</b> — a separate, smaller USB-C port on the side of the meter, wired to its own controller.
+        <b>This is the one that must connect to your computer</b> with a real data-capable USB-C cable for either this
+        page or the desktop app to see the device.</li>
+      </ul>
+
+      <h3>How to connect</h3>
+      <ol>
+        <li>Connect the FNB48S PC-link port to this computer with a data cable.</li>
+        <li>Close <code>UsbMeter.exe</code> or any other app already talking to the meter (only one app can hold the
+        connection at a time).</li>
+        <li>Click <b>Connect device</b> above, choose the FNB48S entry (usually listed as “USB Input Device” or similar)
+        in the browser's picker, and allow access.</li>
+      </ol>
+
+      <h3>What the readings mean</h3>
+      <table>
+        <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Voltage / Current / Power</td><td>Measured at the meter, 100 samples/sec. Power is computed as V × A.</td></tr>
+          <tr><td>D+ / D−</td><td>Voltage on the USB data lines — used by chargers to signal fast-charge modes (see the protocol table above).</td></tr>
+          <tr><td>Temp</td><td>Internal temperature sensor inside the meter (not the cable or charger).</td></tr>
+          <tr><td>Capacity (mAh)</td><td>Current integrated over time since the session started/reset — how much charge has passed through.</td></tr>
+          <tr><td>Energy (mWh)</td><td>Power integrated over time — how much energy has passed through.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Protocol details (for the curious)</h3>
+      <p>
+        The FNB48S speaks a small vendor HID protocol over 64-byte reports: three fixed handshake packets are sent to
+        start streaming, then the meter pushes reports containing four 15-byte samples each (voltage and current as
+        little-endian 32-bit fixed point ÷100000, D+/D− and temperature as little-endian 16-bit fixed point). This
+        page implements that protocol client-side in JavaScript.
+      </p>
+
+      <h3>Troubleshooting</h3>
+      <ul>
+        <li><b>Picker shows nothing:</b> wrong port/cable (see wiring above), or the device is already open in another app.</li>
+        <li><b>"Failed to open device":</b> close <code>UsbMeter.exe</code> and any other program using the meter, then reconnect.</li>
+        <li><b>No numbers updating after connecting:</b> open "Advanced / raw HID info" above to see raw bytes — if
+        reports are arriving but values look wrong, the report framing on your OS/device may differ; that panel shows
+        exactly what's being received to help diagnose it.</li>
+        <li><b>Browser unsupported:</b> WebHID only works in Chromium-based desktop browsers (Chrome, Edge). It is not
+        available in Firefox or Safari, or on mobile Chrome.</li>
+      </ul>
+
+      <h3>Extra features</h3>
+      <ul>
+        <li><b>Battery / capacity test</b> — set a target mAh and expected charge current (mA) to get % charged, live and nominal time-to-full, C-rate, and a warning if the actual current strays far from what you expected.</li>
+        <li><b>Live protocol badge</b> — a stabilized, averaged read of the D+/D− charging protocol match, separate from the instant reference table below it.</li>
+        <li><b>Alert thresholds</b> — set a max V/A (or use a preset) and the matching tile flashes red if exceeded.</li>
+        <li><b>Event markers</b> — drop a labeled marker (button or <span class="kbd">M</span>) to line up something you did (e.g. "unplugged phone") with the graph.</li>
+        <li><b>Named recordings</b> — separate from the live rolling buffer: start/stop a named capture, reviewable later, exportable as CSV.</li>
+        <li><b>Auto-reconnect</b> — a brief USB blip retries the connection automatically for a few seconds before giving up.</li>
+        <li><b>Wake lock</b> — keeps the screen from sleeping while connected, so a long charge test doesn't get interrupted.</li>
+        <li><b>Theme toggle</b> and full JSON export are also available, top-right and in the Session card respectively.</li>
+      </ul>
+
+      <h3>Fast-charge trigger: how it was verified</h3>
+      <p>
+        Every other feature on this page reads data — it can't affect anything. The trigger feature is different: it
+        <i>writes</i> a command that asks the connected charger to change its output voltage. Because of that, its
+        command bytes were not taken from a community guess. They were captured directly from FNIRSI's own
+        <code>UsbMeter.exe</code> using Wireshark + USBPcap while triggering each protocol from its own "Trigger" panel,
+        then matched byte-for-byte, including reproducing its CRC-8 checksum exactly. The five protocol IDs and the
+        millivolt-encoding scheme above are confirmed this way, not guessed. That said: it can only ask, and a
+        charger that doesn't support the requested protocol will simply ignore it (which is what "Trigger failed" in
+        the official app means, too) — but always know what's plugged in downstream before you send one.
+      </p>
+
+      <h3>Credits</h3>
+      <p>
+        This page is an independent, unofficial client and is not affiliated with FNIRSI.
+      </p>
+    </div>
+  </div>
+
+  <footer>FNB48S Web Dashboard · runs entirely in your browser · no data leaves your machine · prepared by hiibrarahmad</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- Constants (from reverse-engineered protocol) ----------
+const DEVICE_FILTERS = [
+  {vendorId:0x2e3c, productId:0x0049}, // FNB48S
+  {vendorId:0x2e3c, productId:0x5558}, // FNB58
+  {vendorId:0x0483, productId:0x003A}, // FNB48
+  {vendorId:0x0483, productId:0x003B}, // C1
+];
+const REPORT_ID = 0xAA;
+const SAMPLE_DT = 0.01; // fixed 100 Hz per sample
+
+function initPackets(productId){
+  const grouped = (productId === 0x0049 || productId === 0x5558); // FNB48S / FNB58
+  return [
+    new Uint8Array([0x81, ...new Array(61).fill(0), 0x8e]),
+    new Uint8Array([0x82, ...new Array(61).fill(0), 0x96]),
+    grouped
+      ? new Uint8Array([0x82, ...new Array(61).fill(0), 0x96])
+      : new Uint8Array([0x83, ...new Array(61).fill(0), 0x9e]),
+  ];
+}
+
+const PROTO_TABLE = [
+  ['USB SDP / DCP (idle)', 0.0, 0.0, 'Standard port or no fast-charge handshake yet'],
+  ['BC1.2 DCP (dumb charger)', 0.5, 0.5, 'Dedicated charging port, D+/D− shorted'],
+  ['Apple 2.4A', 2.0, 2.0, 'Apple-style high current'],
+  ['Apple 2.1A', 2.0, 2.75, 'Apple-style, older iPad profile'],
+  ['Samsung 2A', 1.2, 1.2, 'Samsung proprietary fast charge'],
+  ['QC2.0/3.0 handshake (5V)', 0.6, 0.6, 'Quick Charge negotiating'],
+  ['QC2.0/3.0 9V', 3.3, 0.6, 'Quick Charge 9V requested'],
+  ['QC2.0/3.0 12V', 0.6, 3.3, 'Quick Charge 12V requested'],
+  ['QC3.0 20V (class B)', 3.3, 3.3, 'Quick Charge max voltage'],
+];
+
+// ---------- State ----------
+const state = {
+  device:null, framing:null, // 'numbered' | 'unnumbered'
+  connected:false, keepAliveTimer:null,
+  reportsSeen:0, samplesSeen:0,
+  session:{
+    startT:null, capAs:0, energyWs:0, peakW:0, sumW:0, n:0,
+    minV:Infinity, maxV:-Infinity, minA:Infinity, maxA:-Infinity,
+  },
+  buffer:[], // {t, voltage, current, power, dp, dn, temp}
+  lastReportTime:0, rateWindow:[],
+  chartWindow:60,
+  visibleSeries:{voltage:true, current:true, power:true, dp:false, dn:false},
+  protoCandidate:null, protoCandidateSince:0, protoLocked:null,
+  recording:{active:false, name:'', startT:0, buffer:[]},
+  recordings:[], // saved summaries, persisted to localStorage
+  markers:[], // {t, label}
+  wakeLock:null,
+};
+const rawRecordings = new Map(); // id -> raw sample buffer, in-memory only (this tab session)
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const el = {
+  btnConnect:$('btnConnect'), btnDisconnect:$('btnDisconnect'),
+  statusPill:$('statusPill'), statusText:$('statusText'),
+  bannerUnsupported:$('bannerUnsupported'), bannerBusy:$('bannerBusy'),
+  bannerError:$('bannerError'), bannerErrorTitle:$('bannerErrorTitle'), bannerErrorMsg:$('bannerErrorMsg'),
+  mVolt:$('mVolt'), mAmp:$('mAmp'), mWatt:$('mWatt'), mDp:$('mDp'), mDn:$('mDn'), mTemp:$('mTemp'),
+  mVoltSub:$('mVoltSub'), mAmpSub:$('mAmpSub'), mWattSub:$('mWattSub'),
+  tileVolt:$('tileVolt'), tileAmp:$('tileAmp'), limitV:$('limitV'), limitA:$('limitA'),
+  sCap:$('sCap'), sEnergy:$('sEnergy'), sAvgPk:$('sAvgPk'), sDur:$('sDur'), sSamples:$('sSamples'),
+  sVRange:$('sVRange'), sARange:$('sARange'),
+  btnReset:$('btnReset'), btnCsv:$('btnCsv'), btnPng:$('btnPng'),
+  chart:$('chart'), chartEmpty:$('chartEmpty'), windowSeg:$('windowSeg'), legend:$('legend'),
+  chartAxisX:$('chartAxisX'), chartAxisY:$('chartAxisY'), chartTooltip:$('chartTooltip'), smoothToggle:$('smoothToggle'),
+  pDp:$('pDp'), pDn:$('pDn'), pMatch:$('pMatch'), protoTable:$('protoTable').querySelector('tbody'),
+  protoDot:$('protoDot'), protoName:$('protoName'),
+  battTarget:$('battTarget'), battFill:$('battFill'), battPct:$('battPct'),
+  battRemaining:$('battRemaining'), battEta:$('battEta'), battRate:$('battRate'),
+  battExpectedMa:$('battExpectedMa'), battCrate:$('battCrate'), battNominalEta:$('battNominalEta'),
+  battCurrentWarn:$('battCurrentWarn'),
+  recName:$('recName'), btnRecStart:$('btnRecStart'), btnRecStop:$('btnRecStop'),
+  recStatus:$('recStatus'), recTableBody:$('recTableBody'),
+  dProduct:$('dProduct'), dVidPid:$('dVidPid'), dFraming:$('dFraming'), dReports:$('dReports'),
+  dSamplesDbg:$('dSamplesDbg'), dRate:$('dRate'), dHex:$('dHex'), rateHint:$('rateHint'),
+  rawTableBody:$('rawTableBody'),
+  btnTheme:$('btnTheme'), wakeLockPill:$('wakeLockPill'),
+  presetRow:$('presetRow'), btnClearLimits:$('btnClearLimits'),
+  markerLabel:$('markerLabel'), btnMarker:$('btnMarker'), markerList:$('markerList'),
+  btnJson:$('btnJson'),
+  trigProto:$('trigProto'), trigVoltPreset:$('trigVoltPreset'), trigCustomWrap:$('trigCustomWrap'),
+  trigCustomV:$('trigCustomV'), btnTrigger:$('btnTrigger'), trigConfirm:$('trigConfirm'), trigLog:$('trigLog'),
+  replayCard:$('replayCard'), replayEmpty:$('replayEmpty'), replayFileInput:$('replayFileInput'), replayActive:$('replayActive'),
+  replayName:$('replayName'), replayMeta:$('replayMeta'), btnReplayClose:$('btnReplayClose'),
+  rpVolt:$('rpVolt'), rpAmp:$('rpAmp'), rpWatt:$('rpWatt'), rpDp:$('rpDp'), rpDn:$('rpDn'), rpTemp:$('rpTemp'),
+  replayChart:$('replayChart'), btnReplayRestart:$('btnReplayRestart'), btnReplayPlay:$('btnReplayPlay'),
+  replaySeek:$('replaySeek'), replayTime:$('replayTime'), replaySpeed:$('replaySpeed'),
+};
+
+function setStatus(mode, text){
+  el.statusPill.className = 'status-pill' + (mode ? ' ' + mode : '');
+  el.statusText.textContent = text;
+}
+function showError(title, msg){
+  el.bannerErrorTitle.textContent = title;
+  el.bannerErrorMsg.textContent = ' ' + msg;
+  el.bannerError.classList.add('show');
+}
+function hideError(){ el.bannerError.classList.remove('show'); }
+
+// ---------- Theme ----------
+const THEME_KEY = 'fnb48s_theme';
+function applyTheme(t){
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+(function initTheme(){
+  try{ const saved = localStorage.getItem(THEME_KEY); if (saved) applyTheme(saved); } catch(e){}
+})();
+el.btnTheme.addEventListener('click', () => {
+  const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const current = document.documentElement.dataset.theme || (sysDark ? 'dark' : 'light');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try{ localStorage.setItem(THEME_KEY, next); } catch(e){}
+});
+
+// ---------- Alert threshold presets ----------
+el.presetRow.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.limitv){
+    el.limitV.value = (Number(btn.dataset.limitv) * 1.1).toFixed(1); // headroom over nominal step
+  } else if (btn.dataset.limita){
+    el.limitA.value = btn.dataset.limita;
+  }
+});
+el.btnClearLimits.addEventListener('click', () => { el.limitV.value = ''; el.limitA.value = ''; });
+
+// ---------- Protocol reference table (build once) ----------
+PROTO_TABLE.forEach(row => {
+  const tr = document.createElement('tr');
+  tr.dataset.dp = row[1]; tr.dataset.dn = row[2];
+  tr.innerHTML = `<td>${row[0]}</td><td>${row[1].toFixed(2)}</td><td>${row[2].toFixed(2)}</td><td>${row[3]}</td>`;
+  el.protoTable.appendChild(tr);
+});
+function updateProtoMatch(dp, dn){
+  el.pDp.textContent = dp.toFixed(2) + ' V';
+  el.pDn.textContent = dn.toFixed(2) + ' V';
+  let best = null, bestD = Infinity;
+  PROTO_TABLE.forEach(row => {
+    const d = Math.hypot(dp - row[1], dn - row[2]);
+    if (d < bestD){ bestD = d; best = row; }
+  });
+  [...el.protoTable.children].forEach(tr => tr.classList.remove('match'));
+  if (best && bestD < 0.5){
+    el.pMatch.innerHTML = `Closest match: <b>${best[0]}</b> <span style="opacity:.7">(Δ${bestD.toFixed(2)}V)</span>`;
+    const idx = PROTO_TABLE.indexOf(best);
+    el.protoTable.children[idx].classList.add('match');
+  } else {
+    el.pMatch.textContent = 'No close match in the reference table.';
+  }
+}
+
+// ---------- WebHID support check ----------
+if (!('hid' in navigator)){
+  el.bannerUnsupported.classList.add('show');
+  el.btnConnect.disabled = true;
+}
+
+// ---------- Connect / disconnect ----------
+el.btnConnect.addEventListener('click', connect);
+el.btnDisconnect.addEventListener('click', () => disconnect(true));
+
+async function sendVendorPacket(payload63){
+  if (!state.device) return;
+  if (state.framing === 'numbered'){
+    await state.device.sendReport(REPORT_ID, payload63);
+  } else {
+    const full = new Uint8Array(64);
+    full[0] = REPORT_ID; full.set(payload63, 1);
+    await state.device.sendReport(0x00, full);
+  }
+}
+
+// ---------- Fast-charge trigger (verified against FNIRSI's own app via USB capture) ----------
+const TRIGGER_CMD = 0x88;
+const TRIGGER_PROTOCOLS = {
+  0: {name: 'QC 2.0',      voltages: [5000, 9000, 12000, 20000]},
+  1: {name: 'QC 3.0',      voltages: 'range'}, // continuous, app showed only "QC3.0" with no fixed steps
+  2: {name: 'Huawei FCP',  voltages: [9000, 12000]},
+  3: {name: 'Huawei SCP',  voltages: [5000]},
+  4: {name: 'Samsung AFC', voltages: [9000, 12000]},
+};
+function crc8(bytes){ // poly=0x39, init=0x42 — same algorithm the read-side protocol uses
+  let crc = 0x42;
+  for (const b of bytes){
+    crc ^= b;
+    for (let i=0;i<8;i++) crc = (crc & 0x80) ? ((crc<<1) ^ 0x39) & 0xFF : (crc<<1) & 0xFF;
+  }
+  return crc;
+}
+function buildTriggerPayload(protoId, voltageMv){
+  const inner = new Uint8Array(62);
+  inner[0] = TRIGGER_CMD;
+  inner[1] = protoId & 0xFF;
+  inner[2] = voltageMv & 0xFF;
+  inner[3] = (voltageMv >> 8) & 0xFF;
+  const payload63 = new Uint8Array(63);
+  payload63.set(inner, 0);
+  payload63[62] = crc8(inner);
+  return payload63;
+}
+
+function populateTriggerVoltages(){
+  const proto = TRIGGER_PROTOCOLS[el.trigProto.value];
+  el.trigVoltPreset.innerHTML = '';
+  if (proto.voltages === 'range'){
+    el.trigVoltPreset.style.display = 'none';
+    el.trigCustomWrap.style.display = 'flex';
+  } else {
+    el.trigVoltPreset.style.display = '';
+    el.trigCustomWrap.style.display = 'none';
+    proto.voltages.forEach(mv => {
+      const opt = document.createElement('option');
+      opt.value = mv; opt.textContent = (mv/1000).toFixed(2) + 'V';
+      el.trigVoltPreset.appendChild(opt);
+    });
+  }
+}
+el.trigProto.addEventListener('change', populateTriggerVoltages);
+populateTriggerVoltages();
+
+el.trigConfirm.addEventListener('change', () => {
+  el.btnTrigger.disabled = !(el.trigConfirm.checked && state.connected);
+});
+
+function logTrigger(msg, cls){
+  const line = document.createElement('div');
+  if (cls) line.style.color = cssVar(cls);
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.trigLog.prepend(line);
+}
+
+el.btnTrigger.addEventListener('click', async () => {
+  if (!state.connected || !el.trigConfirm.checked) return;
+  const protoId = Number(el.trigProto.value);
+  const proto = TRIGGER_PROTOCOLS[protoId];
+  const voltageMv = proto.voltages === 'range'
+    ? Math.round(parseFloat(el.trigCustomV.value) * 1000)
+    : Number(el.trigVoltPreset.value);
+  if (!voltageMv || voltageMv < 3000 || voltageMv > 22000){
+    logTrigger('Invalid voltage.', '--danger');
+    return;
+  }
+  const before = state.buffer.length ? state.buffer[state.buffer.length-1].voltage : 0;
+  try{
+    await sendVendorPacket(buildTriggerPayload(protoId, voltageMv));
+    logTrigger(`Sent: ${proto.name} @ ${(voltageMv/1000).toFixed(2)}V`, '--accent');
+  } catch(err){
+    logTrigger(`Send failed: ${err.message || err}`, '--danger');
+    return;
+  }
+  const targetV = voltageMv/1000;
+  setTimeout(() => {
+    const now = state.buffer.length ? state.buffer[state.buffer.length-1].voltage : before;
+    if (Math.abs(now - targetV) < 0.5){
+      logTrigger(`Voltage now ${now.toFixed(2)}V — looks like it worked.`, '--success');
+    } else {
+      logTrigger(`Voltage still ${now.toFixed(2)}V after 3s — charger likely didn't accept it (needs a real ${proto.name}-capable charger).`, '--warning');
+    }
+  }, 3000);
+});
+
+async function connect(){
+  hideError();
+  try{
+    setStatus('connecting', 'Requesting device…');
+    const devices = await navigator.hid.requestDevice({filters: DEVICE_FILTERS});
+    if (!devices.length){ setStatus(null, 'Disconnected'); return; }
+    setStatus('connecting', 'Opening…');
+    await openAndStream(devices[0]);
+  } catch(err){
+    setStatus('error', 'Connection failed');
+    el.bannerBusy.classList.add('show');
+    showError('Could not connect', err.message || String(err));
+  }
+}
+
+async function openAndStream(device){
+  await device.open();
+  state.device = device;
+
+  // Detect report framing from the device's own collections
+  const allReports = [
+    ...device.collections.flatMap(c => c.outputReports || []),
+    ...device.collections.flatMap(c => c.inputReports || []),
+  ];
+  const hasNumbered = allReports.some(r => r.reportId === REPORT_ID);
+  state.framing = hasNumbered ? 'numbered' : 'unnumbered';
+
+  el.dProduct.textContent = device.productName || '(unnamed)';
+  el.dVidPid.textContent = `0x${device.vendorId.toString(16).padStart(4,'0')} / 0x${device.productId.toString(16).padStart(4,'0')}`;
+  el.dFraming.textContent = state.framing;
+
+  // Send the 3 handshake packets
+  const packets = initPackets(device.productId);
+  for (const p of packets){
+    await sendVendorPacket(p);
+    await new Promise(r => setTimeout(r, 25));
+  }
+
+  device.addEventListener('inputreport', onReport);
+  navigator.hid.addEventListener('disconnect', onSystemDisconnect);
+
+  // The meter stops streaming a couple of seconds after the handshake unless
+  // it keeps receiving this packet periodically (1s for FNB48S/FNB58, faster for FNB48/C1).
+  const KEEPALIVE = new Uint8Array([0x83, ...new Array(61).fill(0), 0x9e]);
+  const keepAliveMs = (device.productId === 0x0049 || device.productId === 0x5558) ? 1000 : 50;
+  state.keepAliveTimer = setInterval(() => {
+    sendVendorPacket(KEEPALIVE).catch(() => {});
+  }, keepAliveMs);
+
+  state.connected = true;
+  if (!state.session.startT) state.session.startT = performance.now();
+  setStatus('connected', 'Connected');
+  el.btnConnect.style.display = 'none';
+  el.btnDisconnect.style.display = '';
+  el.btnCsv.disabled = false; el.btnJson.disabled = false; el.btnPng.disabled = false;
+  el.btnTrigger.disabled = !el.trigConfirm.checked;
+  el.chartEmpty.style.display = 'none';
+  requestWakeLock();
+}
+
+// ---------- Screen wake lock (keeps the display on during a long session) ----------
+async function requestWakeLock(){
+  try{
+    if (!('wakeLock' in navigator)) return;
+    state.wakeLock = await navigator.wakeLock.request('screen');
+    el.wakeLockPill.style.display = '';
+    state.wakeLock.addEventListener('release', () => { el.wakeLockPill.style.display = 'none'; });
+  } catch(e){ /* not critical if unavailable */ }
+}
+async function releaseWakeLock(){
+  if (state.wakeLock){ try{ await state.wakeLock.release(); } catch(e){} state.wakeLock = null; }
+  el.wakeLockPill.style.display = 'none';
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.connected && !state.wakeLock) requestWakeLock();
+});
+
+async function disconnect(userInitiated){
+  if (state.keepAliveTimer){ clearInterval(state.keepAliveTimer); state.keepAliveTimer = null; }
+  if (state.device){
+    try{ await state.device.close(); } catch(e){}
+  }
+  state.device = null; state.connected = false;
+  releaseWakeLock();
+  setStatus(null, 'Disconnected');
+  el.btnConnect.style.display = ''; el.btnDisconnect.style.display = 'none';
+  el.btnTrigger.disabled = true;
+  if (userInitiated) el.bannerBusy.classList.remove('show');
+}
+
+const RECONNECT_ATTEMPTS = 5, RECONNECT_DELAY_MS = 1000;
+function onSystemDisconnect(e){
+  if (!state.device || e.device !== state.device) return;
+  if (state.keepAliveTimer){ clearInterval(state.keepAliveTimer); state.keepAliveTimer = null; }
+  state.connected = false;
+  setStatus('connecting', 'Connection lost — reconnecting…');
+  attemptReconnect(state.device, 1);
+}
+async function attemptReconnect(device, attempt){
+  if (attempt > RECONNECT_ATTEMPTS){
+    showError('Device disconnected', 'The FNB48S was unplugged, closed by another app, or is no longer reachable — reconnect attempts gave up. Click Connect device to try again.');
+    disconnect(false);
+    return;
+  }
+  setStatus('connecting', `Reconnecting… (${attempt}/${RECONNECT_ATTEMPTS})`);
+  await new Promise(r => setTimeout(r, RECONNECT_DELAY_MS));
+  try{
+    await openAndStream(device);
+    hideError();
+  } catch(err){
+    attemptReconnect(device, attempt + 1);
+  }
+}
+
+// ---------- Parsing ----------
+function onReport(event){
+  const { data, reportId } = event;
+  state.reportsSeen++;
+  el.dReports.textContent = state.reportsSeen;
+
+  // Robust to both framing styles: if the OS didn't strip a report id,
+  // data[0] will still be the 0xAA marker and packet type at data[1].
+  let bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  let base; // index of packet-type byte within `bytes`
+  if (bytes.length >= 64 && bytes[0] === REPORT_ID){
+    base = 1;
+  } else {
+    base = 0; // report id already stripped by the OS (reportId === 0xAA)
+  }
+  const packetType = bytes[base];
+  if (packetType !== 0x04) return; // ignore non-data packets
+
+  const now = performance.now();
+  for (let s = 0; s < 4; s++){
+    const off = base + 1 + s * 15;
+    if (off + 15 > bytes.length) break;
+    const voltage = (bytes[off+0] | bytes[off+1]<<8 | bytes[off+2]<<16 | bytes[off+3]<<24) >>> 0;
+    const current = (bytes[off+4] | bytes[off+5]<<8 | bytes[off+6]<<16 | bytes[off+7]<<24) >>> 0;
+    const dp = (bytes[off+8] | bytes[off+9]<<8);
+    const dn = (bytes[off+10] | bytes[off+11]<<8);
+    const temp = (bytes[off+13] | bytes[off+14]<<8);
+    addSample({
+      t: now,
+      voltage: voltage/100000, current: current/100000,
+      dp: dp/1000, dn: dn/1000, temp: temp/10,
+    });
+  }
+
+  if (state.buffer.length){
+    const b = bytes.subarray(0, Math.min(bytes.length, 24));
+    el.dHex.textContent = '[' + (reportId ? '0x'+reportId.toString(16) : 'no id') + '] '
+      + Array.from(b).map(x => x.toString(16).padStart(2,'0')).join(' ') + ' …';
+  }
+
+  state.rateWindow.push(now);
+  state.rateWindow = state.rateWindow.filter(t => now - t < 2000);
+  const rate = (state.rateWindow.length * 4) / 2; // samples/sec approx
+  el.dRate.textContent = rate.toFixed(0) + ' samples/s';
+  el.rateHint.textContent = `— ${rate.toFixed(0)} samples/sec`;
+}
+
+function addSample(sample){
+  sample.power = sample.voltage * sample.current;
+  state.buffer.push(sample);
+  state.samplesSeen++;
+  el.dSamplesDbg.textContent = state.samplesSeen;
+
+  const s = state.session;
+  s.capAs += sample.current * SAMPLE_DT;
+  s.energyWs += sample.power * SAMPLE_DT;
+  s.sumW += sample.power; s.n++;
+  if (sample.power > s.peakW) s.peakW = sample.power;
+  if (sample.voltage < s.minV) s.minV = sample.voltage;
+  if (sample.voltage > s.maxV) s.maxV = sample.voltage;
+  if (sample.current < s.minA) s.minA = sample.current;
+  if (sample.current > s.maxA) s.maxA = sample.current;
+
+  if (state.buffer.length > 400000) state.buffer.splice(0, state.buffer.length - 400000);
+  if (state.recording.active) state.recording.buffer.push(sample);
+
+  updateMetrics(sample);
+}
+
+function updateMetrics(sample){
+  el.mVolt.innerHTML = sample.voltage.toFixed(3) + '<span class="unit">V</span>';
+  el.mAmp.innerHTML = sample.current.toFixed(3) + '<span class="unit">A</span>';
+  el.mWatt.innerHTML = sample.power.toFixed(3) + '<span class="unit">W</span>';
+  el.mDp.innerHTML = sample.dp.toFixed(2) + '<span class="unit">V</span>';
+  el.mDn.innerHTML = sample.dn.toFixed(2) + '<span class="unit">V</span>';
+  el.mTemp.innerHTML = sample.temp.toFixed(1) + '<span class="unit">°C</span>';
+  updateProtoMatch(sample.dp, sample.dn);
+
+  const limitV = parseFloat(el.limitV.value), limitA = parseFloat(el.limitA.value);
+  const overV = !isNaN(limitV) && sample.voltage > limitV;
+  const overA = !isNaN(limitA) && sample.current > limitA;
+  el.tileVolt.classList.toggle('alert', overV);
+  el.tileAmp.classList.toggle('alert', overA);
+  el.mVoltSub.textContent = overV ? `⚠ over ${limitV}V limit` : ' ';
+  el.mAmpSub.textContent = overA ? `⚠ over ${limitA}A limit` : ' ';
+
+  const s = state.session;
+  el.sCap.innerHTML = (s.capAs/3.6).toFixed(1) + '<span class="unit">mAh</span>';
+  el.sEnergy.innerHTML = (s.energyWs/3.6).toFixed(1) + '<span class="unit">mWh</span>';
+  el.sAvgPk.innerHTML = (s.n? (s.sumW/s.n).toFixed(2):'–') + ' / ' + s.peakW.toFixed(2) + '<span class="unit">W</span>';
+  const durS = s.startT ? (performance.now() - s.startT)/1000 : 0;
+  const mm = String(Math.floor(durS/60)).padStart(2,'0');
+  const ss = String(Math.floor(durS%60)).padStart(2,'0');
+  el.sDur.textContent = `${mm}:${ss}`;
+  el.sSamples.textContent = state.samplesSeen.toLocaleString() + ' samples';
+  if (s.n){
+    el.sVRange.innerHTML = s.minV.toFixed(2) + ' / ' + s.maxV.toFixed(2) + '<span class="unit">V</span>';
+    el.sARange.innerHTML = s.minA.toFixed(3) + ' / ' + s.maxA.toFixed(3) + '<span class="unit">A</span>';
+  }
+}
+
+// ---------- Battery / capacity test ----------
+function fmtHM(totalS){
+  const h = Math.floor(totalS/3600), m = Math.round((totalS%3600)/60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function updateBatteryEstimate(){
+  const target = parseFloat(el.battTarget.value);
+  const expectedMa = parseFloat(el.battExpectedMa.value);
+  const s = state.session;
+  const haveMah = s.capAs / 3.6;
+
+  // C-rate + nominal estimate: pure config math, works even before a session has data
+  if (target > 0 && expectedMa > 0){
+    el.battCrate.textContent = (expectedMa/target).toFixed(2) + 'C';
+    el.battNominalEta.textContent = fmtHM((target/expectedMa) * 3600);
+  } else {
+    el.battCrate.textContent = '–';
+    el.battNominalEta.textContent = '–';
+  }
+
+  const now = state.buffer.length ? state.buffer[state.buffer.length-1].t : 0;
+  const recent = state.buffer.filter(p => now - p.t <= 10000);
+  const avgA = recent.length ? recent.reduce((a,p)=>a+p.current,0)/recent.length : 0;
+  const avgMa = avgA * 1000;
+
+  // Flag if the live current is way off from what was expected (loose/bad cable, wrong charger, wrong battery, etc.)
+  if (expectedMa > 0 && avgMa > 1){
+    const dev = (avgMa - expectedMa) / expectedMa;
+    if (Math.abs(dev) > 0.3){
+      el.battCurrentWarn.classList.add('show');
+      el.battCurrentWarn.innerHTML = `<div><b>Current doesn't match expectation</b>Actual ~${avgMa.toFixed(0)}mA vs expected ${expectedMa.toFixed(0)}mA (${dev>0?'+':''}${(dev*100).toFixed(0)}%) — check the cable/port, or the charger may be current-limiting.</div>`;
+    } else {
+      el.battCurrentWarn.classList.remove('show');
+    }
+  } else {
+    el.battCurrentWarn.classList.remove('show');
+  }
+
+  if (!target || target <= 0 || !s.n){
+    el.battFill.style.height = '0%';
+    el.battPct.textContent = '–';
+    el.battRemaining.textContent = '–';
+    el.battEta.textContent = '–';
+    el.battRate.textContent = avgMa > 1 ? avgMa.toFixed(0) + ' mA' : '–';
+    return;
+  }
+  const pct = Math.min(100, (haveMah / target) * 100);
+  el.battFill.style.height = pct.toFixed(1) + '%';
+  el.battFill.style.background = pct >= 100 ? cssVar('--success') : (pct >= 85 ? cssVar('--warning') : cssVar('--accent'));
+  el.battPct.textContent = pct.toFixed(0) + '%';
+
+  const remainingMah = Math.max(0, target - haveMah);
+  el.battRemaining.textContent = remainingMah.toFixed(0) + ' mAh';
+  el.battRate.textContent = avgMa > 1 ? avgMa.toFixed(0) + ' mA' : '–';
+
+  if (avgMa > 1 && remainingMah > 0){
+    el.battEta.textContent = fmtHM((remainingMah / avgMa) * 3600);
+  } else {
+    el.battEta.textContent = pct >= 100 ? 'Full' : '–';
+  }
+}
+
+// ---------- Stabilized protocol badge (averaged + hysteresis, avoids flicker) ----------
+function updateProtocolBadge(){
+  if (!state.buffer.length){ return; }
+  const now = state.buffer[state.buffer.length-1].t;
+  const recent = state.buffer.filter(p => now - p.t <= 500);
+  if (!recent.length) return;
+  const avgDp = recent.reduce((a,p)=>a+p.dp,0)/recent.length;
+  const avgDn = recent.reduce((a,p)=>a+p.dn,0)/recent.length;
+
+  let best = null, bestD = Infinity;
+  PROTO_TABLE.forEach(row => {
+    const d = Math.hypot(avgDp-row[1], avgDn-row[2]);
+    if (d < bestD){ bestD = d; best = row; }
+  });
+  const candidate = (best && bestD < 0.4) ? best[0] : null;
+
+  if (candidate !== state.protoCandidate){
+    state.protoCandidate = candidate;
+    state.protoCandidateSince = performance.now();
+  } else if (candidate && performance.now() - state.protoCandidateSince > 600 && state.protoLocked !== candidate){
+    state.protoLocked = candidate;
+  }
+  if (!candidate) state.protoLocked = null;
+
+  if (state.protoLocked){
+    el.protoName.textContent = state.protoLocked;
+    el.protoDot.classList.add('locked');
+  } else {
+    el.protoName.textContent = candidate ? `Detecting: ${candidate}…` : 'No match';
+    el.protoDot.classList.remove('locked');
+  }
+}
+
+// ---------- Reset / export ----------
+el.btnReset.addEventListener('click', () => {
+  state.buffer = [];
+  state.session = {
+    startT: performance.now(), capAs:0, energyWs:0, peakW:0, sumW:0, n:0,
+    minV:Infinity, maxV:-Infinity, minA:Infinity, maxA:-Infinity,
+  };
+  state.samplesSeen = 0;
+  state.protoCandidate = null; state.protoLocked = null;
+  state.markers = [];
+  renderMarkers();
+});
+el.battTarget.addEventListener('input', updateBatteryEstimate);
+
+el.btnCsv.addEventListener('click', () => {
+  const rows = ['timestamp_ms,voltage_V,current_A,power_W,dplus_V,dminus_V,temp_C'];
+  const t0 = state.buffer.length ? state.buffer[0].t : 0;
+  state.buffer.forEach(s => rows.push(
+    [(s.t-t0).toFixed(1), s.voltage.toFixed(5), s.current.toFixed(5), s.power.toFixed(5), s.dp.toFixed(3), s.dn.toFixed(3), s.temp.toFixed(1)].join(',')
+  ));
+  downloadBlob(new Blob([rows.join('\n')], {type:'text/csv'}), `fnb48s-session-${Date.now()}.csv`);
+});
+el.btnJson.addEventListener('click', () => {
+  const t0 = state.buffer.length ? state.buffer[0].t : 0;
+  const payload = {
+    device: state.device ? {vendorId: state.device.vendorId, productId: state.device.productId, productName: state.device.productName} : null,
+    session: state.session,
+    markers: state.markers.map(m => ({t: m.t - t0, label: m.label})),
+    samples: state.buffer.map(s => ({t: s.t - t0, voltage: s.voltage, current: s.current, power: s.power, dp: s.dp, dn: s.dn, temp: s.temp})),
+  };
+  downloadBlob(new Blob([JSON.stringify(payload, null, 1)], {type:'application/json'}), `fnb48s-session-${Date.now()}.json`);
+});
+el.btnPng.addEventListener('click', () => {
+  el.chart.toBlob(blob => downloadBlob(blob, `fnb48s-chart-${Date.now()}.png`));
+});
+
+// ---------- Event markers ----------
+function addMarker(label){
+  if (!state.buffer.length) return;
+  const t = state.buffer[state.buffer.length-1].t;
+  state.markers.push({t, label: label || `Marker ${state.markers.length+1}`});
+  renderMarkers();
+}
+function renderMarkers(){
+  const t0 = state.buffer.length ? state.buffer[0].t : 0;
+  el.markerList.innerHTML = '';
+  state.markers.forEach((m, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'marker-chip';
+    chip.innerHTML = `📍 ${m.label} <span style="opacity:.6">(+${((m.t-t0)/1000).toFixed(1)}s)</span> <button data-i="${i}">✕</button>`;
+    el.markerList.appendChild(chip);
+  });
+}
+el.markerList.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-i]');
+  if (!btn) return;
+  state.markers.splice(Number(btn.dataset.i), 1);
+  renderMarkers();
+});
+el.btnMarker.addEventListener('click', () => {
+  addMarker(el.markerLabel.value.trim());
+  el.markerLabel.value = '';
+});
+function downloadBlob(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ---------- Chart ----------
+el.legend.addEventListener('change', e => {
+  const key = e.target.dataset.series;
+  if (key) state.visibleSeries[key] = e.target.checked;
+});
+el.windowSeg.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-win]');
+  if (!btn) return;
+  [...el.windowSeg.children].forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.chartWindow = Number(btn.dataset.win);
+});
+
+const SERIES_COLOR    = {voltage:'--volt', current:'--amp', power:'--watt', dp:'--dp', dn:'--dn'};
+const SERIES_UNIT      = {voltage:'V', current:'A', power:'W', dp:'V', dn:'V'};
+const SERIES_LABEL     = {voltage:'Voltage', current:'Current', power:'Power', dp:'D+', dn:'D-'};
+const SERIES_DECIMALS  = {voltage:2, current:3, power:2, dp:2, dn:2};
+const ALL_KEYS = ['voltage','current','power','dp','dn'];
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function fmtVal(key, v){ return v.toFixed(SERIES_DECIMALS[key]) + SERIES_UNIT[key]; }
+
+let dpr = window.devicePixelRatio || 1, cssW = 0, cssH = 0;
+function resizeCanvas(){
+  const canvas = el.chart, rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  cssW = Math.max(1, Math.round(rect.width));
+  cssH = Math.max(1, Math.round(rect.height));
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+
+// Average raw samples into ~1 bucket per pixel column: smooths noise instead of
+// amplifying it (nearest-neighbour decimation would just pick a random noisy sample).
+function bucketize(pts, t0, t1, buckets){
+  const span = (t1 - t0) || 1;
+  const sums = new Array(buckets).fill(null);
+  pts.forEach(p => {
+    let bi = Math.floor(((p.t - t0) / span) * buckets);
+    if (bi < 0) bi = 0; if (bi >= buckets) bi = buckets - 1;
+    const b = sums[bi] || (sums[bi] = {n:0, t:0, voltage:0, current:0, power:0, dp:0, dn:0});
+    b.n++; b.t += p.t;
+    ALL_KEYS.forEach(k => b[k] += p[k]);
+  });
+  const out = [];
+  sums.forEach(b => { if (b) out.push({t:b.t/b.n, voltage:b.voltage/b.n, current:b.current/b.n, power:b.power/b.n, dp:b.dp/b.n, dn:b.dn/b.n}); });
+  return out;
+}
+function movingAvg(values, radius){
+  if (radius <= 0) return values;
+  const out = new Array(values.length);
+  for (let i=0;i<values.length;i++){
+    let sum=0, n=0;
+    for (let k=-radius;k<=radius;k++){
+      const j=i+k;
+      if (j>=0 && j<values.length){ sum += values[j]; n++; }
+    }
+    out[i] = sum/n;
+  }
+  return out;
+}
+
+let lastDrawnPts = [], lastT0 = 0, lastT1 = 1;
+
+function drawChart(){
+  if (!cssW) resizeCanvas();
+  if (!cssW) return;
+  const ctx = el.chart.getContext('2d');
+  ctx.clearRect(0,0,cssW,cssH);
+  if (!state.buffer.length) return;
+
+  const now = state.buffer[state.buffer.length-1].t;
+  const raw = state.chartWindow
+    ? state.buffer.filter(s => now - s.t <= state.chartWindow*1000)
+    : state.buffer;
+  const usable = raw.length >= 2 ? raw : state.buffer.slice(-2);
+  if (usable.length < 2) return;
+
+  const t0 = usable[0].t, t1 = usable[usable.length-1].t;
+  const bucketCount = Math.max(20, Math.min(cssW, 500));
+  let pts = bucketize(usable, t0, t1, bucketCount);
+  if (pts.length < 2) pts = usable;
+
+  if (el.smoothToggle.checked){
+    const radius = 2;
+    const cols = {};
+    ALL_KEYS.forEach(k => cols[k] = movingAvg(pts.map(p=>p[k]), radius));
+    pts = pts.map((p,i) => ({t:p.t, voltage:cols.voltage[i], current:cols.current[i], power:cols.power[i], dp:cols.dp[i], dn:cols.dn[i]}));
+  }
+  lastDrawnPts = pts; lastT0 = t0; lastT1 = t1;
+
+  const padTop = 10, padBottom = 6;
+  const plotH = cssH - padTop - padBottom;
+
+  ctx.strokeStyle = cssVar('--border'); ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++){
+    const y = padTop + plotH*i/4;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cssW,y); ctx.stroke();
+  }
+
+  const ranges = {};
+  ALL_KEYS.forEach(key => {
+    const vals = pts.map(p=>p[key]);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const pad = Math.max((max-min)*0.08, 0.0005);
+    max += pad; min -= pad;
+    ranges[key] = {min, max};
+    const rngEl = el.legend.querySelector(`[data-rng="${key}"]`);
+    if (rngEl){
+      rngEl.textContent = state.visibleSeries[key]
+        ? ` ${fmtVal(key, vals[vals.length-1])} (${min.toFixed(SERIES_DECIMALS[key])}–${max.toFixed(SERIES_DECIMALS[key])})`
+        : '';
+    }
+  });
+
+  const xOf = t => (t1===t0) ? 0 : (t - t0)/(t1-t0) * cssW;
+  const yOf = (key, v) => { const r = ranges[key]; return padTop + plotH - ((v - r.min)/(r.max - r.min)) * plotH; };
+
+  if (state.visibleSeries.power && pts.length > 1){
+    ctx.beginPath();
+    pts.forEach((p,i) => { const x=xOf(p.t), y=yOf('power',p.power); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.lineTo(xOf(pts[pts.length-1].t), padTop+plotH);
+    ctx.lineTo(xOf(pts[0].t), padTop+plotH);
+    ctx.closePath();
+    const watt = cssVar('--watt');
+    const grad = ctx.createLinearGradient(0, padTop, 0, padTop+plotH);
+    grad.addColorStop(0, watt + '30');
+    grad.addColorStop(1, watt + '00');
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  ALL_KEYS.forEach(key => {
+    if (!state.visibleSeries[key]) return;
+    ctx.strokeStyle = cssVar(SERIES_COLOR[key]);
+    ctx.lineWidth = key === 'power' ? 2.25 : 1.75;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    pts.forEach((p,i) => {
+      const x = xOf(p.t), y = yOf(key, p[key]);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  });
+
+  // y axis (anchored to Power when visible, else the first visible series)
+  const axisKey = state.visibleSeries.power ? 'power' : ALL_KEYS.find(k => state.visibleSeries[k]);
+  el.chartAxisY.innerHTML = '';
+  if (axisKey){
+    const r = ranges[axisKey];
+    const mid = (r.min + r.max) / 2;
+    [r.max, mid, r.min].forEach(v => {
+      const span = document.createElement('span');
+      span.textContent = v.toFixed(SERIES_DECIMALS[axisKey]) + SERIES_UNIT[axisKey];
+      span.style.color = cssVar(SERIES_COLOR[axisKey]);
+      el.chartAxisY.appendChild(span);
+    });
+  }
+
+  // event markers
+  ctx.font = '10px ' + getComputedStyle(document.body).fontFamily;
+  state.markers.forEach(m => {
+    if (m.t < t0 || m.t > t1) return;
+    const x = xOf(m.t);
+    ctx.strokeStyle = cssVar('--accent'); ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x, padTop); ctx.lineTo(x, padTop+plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cssVar('--accent');
+    ctx.fillText(m.label, Math.min(x+3, cssW-4-ctx.measureText(m.label).width), padTop+10);
+  });
+
+  // time axis
+  const spanS = (t1 - t0)/1000;
+  el.chartAxisX.innerHTML = '';
+  const nTicks = spanS > 90 ? 6 : 5;
+  for (let i=0;i<nTicks;i++){
+    const frac = i/(nTicks-1);
+    const span = document.createElement('span');
+    span.textContent = i === nTicks-1 ? 'now' : `-${Math.round(spanS*(1-frac))}s`;
+    el.chartAxisX.appendChild(span);
+  }
+}
+
+// Hover tooltip with exact values for every visible series at the cursor position
+el.chart.addEventListener('mousemove', e => {
+  if (lastDrawnPts.length < 2) return;
+  const rect = el.chart.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const t = lastT0 + (x/cssW) * (lastT1-lastT0);
+  let nearest = lastDrawnPts[0], bestD = Infinity;
+  lastDrawnPts.forEach(p => { const d = Math.abs(p.t - t); if (d < bestD){ bestD = d; nearest = p; } });
+
+  const elapsedS = ((nearest.t - lastDrawnPts[0].t)/1000).toFixed(1);
+  let html = `<div class="tt-time">t = +${elapsedS}s</div>`;
+  ALL_KEYS.forEach(key => {
+    if (!state.visibleSeries[key]) return;
+    html += `<div class="tt-row"><span class="sw" style="background:${cssVar(SERIES_COLOR[key])}"></span>${SERIES_LABEL[key]}: <b>${fmtVal(key, nearest[key])}</b></div>`;
+  });
+  el.chartTooltip.innerHTML = html;
+  el.chartTooltip.style.display = 'block';
+  let left = x + 14;
+  if (left + 160 > cssW) left = Math.max(0, x - 160);
+  el.chartTooltip.style.left = left + 'px';
+});
+el.chart.addEventListener('mouseleave', () => { el.chartTooltip.style.display = 'none'; });
+
+setInterval(() => { if (state.connected || state.buffer.length) drawChart(); }, 150);
+setInterval(() => {
+  if (!state.connected) return;
+  updateMetrics(state.buffer[state.buffer.length-1] || {voltage:0,current:0,power:0,dp:0,dn:0,temp:0});
+  updateBatteryEstimate();
+  updateProtocolBadge();
+  updateRawTable();
+}, 500);
+
+function updateRawTable(){
+  const last = state.buffer.slice(-10);
+  if (!last.length) return;
+  const t0 = state.buffer[0].t;
+  el.rawTableBody.innerHTML = last.map(s => `<tr>
+    <td>${((s.t-t0)/1000).toFixed(2)}</td><td>${s.voltage.toFixed(3)}</td><td>${s.current.toFixed(3)}</td>
+    <td>${s.power.toFixed(3)}</td><td>${s.dp.toFixed(2)}</td><td>${s.dn.toFixed(2)}</td><td>${s.temp.toFixed(1)}</td>
+  </tr>`).join('');
+}
+
+// ---------- Session recording ----------
+const RECORDINGS_KEY = 'fnb48s_recordings_v1';
+
+function summarizeRecording(buf){
+  let capAs=0, energyWs=0, peakW=-Infinity, sumW=0;
+  buf.forEach(s => { capAs += s.current*SAMPLE_DT; energyWs += s.power*SAMPLE_DT; sumW += s.power; if (s.power>peakW) peakW=s.power; });
+  return {
+    durationS: (buf[buf.length-1].t - buf[0].t)/1000,
+    samples: buf.length,
+    avgW: sumW/buf.length, peakW,
+    capMah: capAs/3.6, energyMWh: energyWs/3.6,
+  };
+}
+
+function saveRecordings(){
+  try{ localStorage.setItem(RECORDINGS_KEY, JSON.stringify(state.recordings)); } catch(e){}
+}
+function loadRecordings(){
+  try{
+    const raw = localStorage.getItem(RECORDINGS_KEY);
+    if (raw) state.recordings = JSON.parse(raw);
+  } catch(e){ state.recordings = []; }
+}
+
+function renderRecordings(){
+  const tbody = el.recTableBody;
+  if (!state.recordings.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--text-dim); text-align:center; padding:16px 0;">No recordings yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  [...state.recordings].reverse().forEach(rec => {
+    const tr = document.createElement('tr');
+    const mm = String(Math.floor(rec.durationS/60)).padStart(2,'0');
+    const ss = String(Math.floor(rec.durationS%60)).padStart(2,'0');
+    const hasRaw = rawRecordings.has(rec.id);
+    const target = rec.targetMah ? `${rec.reachedPct.toFixed(0)}% of ${rec.targetMah}mAh` : '—';
+    tr.innerHTML = `
+      <td>${rec.name}</td>
+      <td>${new Date(rec.startedAt).toLocaleString()}</td>
+      <td>${mm}:${ss}</td>
+      <td>${rec.samples.toLocaleString()}</td>
+      <td>${rec.avgW.toFixed(2)} / ${rec.peakW.toFixed(2)}</td>
+      <td>${rec.capMah.toFixed(1)} mAh</td>
+      <td>${rec.energyMWh.toFixed(1)} mWh</td>
+      <td>${target}</td>
+      <td>
+        <button class="small" data-act="replay" data-id="${rec.id}" ${hasRaw?'':'disabled title="Raw data unavailable after reload — load a JSON export instead"'}>▶ Replay</button>
+        <button class="small" data-act="exportcsv" data-id="${rec.id}" ${hasRaw?'':'disabled'}>⬇ CSV</button>
+        <button class="small" data-act="exportjson" data-id="${rec.id}" ${hasRaw?'':'disabled'}>⬇ JSON</button>
+        <button class="small" data-act="delete" data-id="${rec.id}">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function recordingToJson(rec, buf){
+  const t0 = buf[0].t;
+  return JSON.stringify({
+    name: rec.name, startedAt: rec.startedAt, targetMah: rec.targetMah,
+    samples: buf.map(s => ({t: s.t-t0, voltage: s.voltage, current: s.current, power: s.power, dp: s.dp, dn: s.dn, temp: s.temp})),
+  }, null, 1);
+}
+
+el.recTableBody.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  const rec = state.recordings.find(r => r.id === id);
+  if (btn.dataset.act === 'delete'){
+    state.recordings = state.recordings.filter(r => r.id !== id);
+    rawRecordings.delete(id);
+    saveRecordings();
+    renderRecordings();
+  } else if (btn.dataset.act === 'exportcsv'){
+    const buf = rawRecordings.get(id);
+    if (!buf) return;
+    const rows = ['timestamp_ms,voltage_V,current_A,power_W,dplus_V,dminus_V,temp_C'];
+    const t0 = buf[0].t;
+    buf.forEach(s => rows.push([(s.t-t0).toFixed(1), s.voltage.toFixed(5), s.current.toFixed(5), s.power.toFixed(5), s.dp.toFixed(3), s.dn.toFixed(3), s.temp.toFixed(1)].join(',')));
+    downloadBlob(new Blob([rows.join('\n')], {type:'text/csv'}), `${(rec?.name||'recording').replace(/[^a-z0-9_-]+/gi,'_')}-${id}.csv`);
+  } else if (btn.dataset.act === 'exportjson'){
+    const buf = rawRecordings.get(id);
+    if (!buf || !rec) return;
+    downloadBlob(new Blob([recordingToJson(rec, buf)], {type:'application/json'}), `${(rec.name||'recording').replace(/[^a-z0-9_-]+/gi,'_')}-${id}.json`);
+  } else if (btn.dataset.act === 'replay'){
+    const buf = rawRecordings.get(id);
+    if (!buf || !rec) return;
+    startReplay(rec.name, buf);
+  }
+});
+
+el.btnRecStart.addEventListener('click', () => {
+  state.recording = {active:true, name: el.recName.value.trim() || `Session ${new Date().toLocaleString()}`, startT: performance.now(), buffer:[]};
+  el.btnRecStart.style.display = 'none';
+  el.btnRecStop.style.display = '';
+  el.recStatus.textContent = '● Recording…';
+  el.recStatus.style.color = 'var(--danger)';
+});
+el.btnRecStop.addEventListener('click', () => {
+  state.recording.active = false;
+  el.btnRecStart.style.display = '';
+  el.btnRecStop.style.display = 'none';
+  el.recStatus.textContent = '';
+  el.recStatus.style.color = '';
+
+  if (state.recording.buffer.length >= 2){
+    const summary = summarizeRecording(state.recording.buffer);
+    const id = Date.now();
+    const targetMah = parseFloat(el.battTarget.value) || null;
+    const rec = {
+      id, name: state.recording.name, startedAt: Date.now() - summary.durationS*1000, ...summary,
+      targetMah, reachedPct: targetMah ? Math.min(100, (summary.capMah/targetMah)*100) : null,
+    };
+    rawRecordings.set(id, state.recording.buffer);
+    state.recordings.push(rec);
+    saveRecordings();
+    renderRecordings();
+  }
+  state.recording = {active:false, name:'', startT:0, buffer:[]};
+  el.recName.value = '';
+});
+
+// ---------- Replay ----------
+const replay = {name:'', samples:[], idx:0, playing:false, speed:1, rafId:null, lastWallTime:0, virtualT:0};
+
+function normalizeReplaySamples(buf){
+  const t0 = buf.length ? buf[0].t : 0;
+  return buf.map(s => ({
+    t: s.t - t0, voltage: s.voltage, current: s.current,
+    power: s.power ?? (s.voltage * s.current), dp: s.dp, dn: s.dn, temp: s.temp,
+  }));
+}
+
+function startReplay(name, buf){
+  replay.name = name;
+  replay.samples = normalizeReplaySamples(buf);
+  replay.idx = 0; replay.virtualT = 0; replay.playing = false;
+  if (replay.rafId){ cancelAnimationFrame(replay.rafId); replay.rafId = null; }
+  el.btnReplayPlay.textContent = '▶ Play';
+  el.replayEmpty.style.display = 'none';
+  el.replayActive.style.display = '';
+  el.replayName.textContent = name;
+  const durS = replay.samples.length ? replay.samples[replay.samples.length-1].t/1000 : 0;
+  el.replayMeta.textContent = `${replay.samples.length.toLocaleString()} samples · ${durS.toFixed(1)}s`;
+  el.replaySeek.max = Math.max(0, replay.samples.length-1);
+  el.replaySeek.value = 0;
+  renderReplayFrame();
+  el.replayCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function stopReplay(){
+  replay.playing = false;
+  if (replay.rafId){ cancelAnimationFrame(replay.rafId); replay.rafId = null; }
+  replay.samples = [];
+  el.replayActive.style.display = 'none';
+  el.replayEmpty.style.display = 'flex';
+}
+
+function renderReplayFrame(){
+  const s = replay.samples[replay.idx];
+  if (!s) return;
+  el.rpVolt.innerHTML = s.voltage.toFixed(3) + '<span class="unit">V</span>';
+  el.rpAmp.innerHTML = s.current.toFixed(3) + '<span class="unit">A</span>';
+  el.rpWatt.innerHTML = s.power.toFixed(3) + '<span class="unit">W</span>';
+  el.rpDp.innerHTML = s.dp.toFixed(2) + '<span class="unit">V</span>';
+  el.rpDn.innerHTML = s.dn.toFixed(2) + '<span class="unit">V</span>';
+  el.rpTemp.innerHTML = s.temp.toFixed(1) + '<span class="unit">°C</span>';
+  el.replaySeek.value = replay.idx;
+  const total = replay.samples[replay.samples.length-1].t/1000;
+  el.replayTime.textContent = `${(s.t/1000).toFixed(1)}s / ${total.toFixed(1)}s`;
+  drawReplayChart();
+}
+
+function drawReplayChart(){
+  const canvas = el.replayChart, ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width)), h = Math.max(1, Math.round(rect.height));
+  const dprL = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(w*dprL) || canvas.height !== Math.round(h*dprL)){
+    canvas.width = Math.round(w*dprL); canvas.height = Math.round(h*dprL);
+    ctx.setTransform(dprL, 0, 0, dprL, 0, 0);
+  }
+  ctx.clearRect(0, 0, w, h);
+  const pts = replay.samples;
+  if (pts.length < 2) return;
+
+  const t0 = 0, t1 = pts[pts.length-1].t || 1;
+  const buckets = Math.max(20, Math.min(w, 400));
+  const bucketed = bucketize(pts, t0, t1, buckets);
+
+  const padTop = 8, padBottom = 4, plotH = h - padTop - padBottom;
+  ctx.strokeStyle = cssVar('--border'); ctx.lineWidth = 1;
+  for (let i=0; i<=3; i++){
+    const y = padTop + plotH*i/3;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+  }
+
+  const ranges = {};
+  ['voltage','current','power'].forEach(key => {
+    const vals = bucketed.map(p => p[key]);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const pad = Math.max((max-min)*0.08, 0.0005);
+    ranges[key] = {min: min-pad, max: max+pad};
+  });
+  const xOf = t => (t1===t0) ? 0 : (t-t0)/(t1-t0) * w;
+  const yOf = (key,v) => { const r = ranges[key]; return padTop + plotH - ((v-r.min)/(r.max-r.min)) * plotH; };
+
+  ['voltage','current','power'].forEach(key => {
+    ctx.strokeStyle = cssVar(SERIES_COLOR[key]);
+    ctx.lineWidth = key === 'power' ? 2.25 : 1.75;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    bucketed.forEach((p,i) => { const x=xOf(p.t), y=yOf(key,p[key]); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+  });
+
+  const curT = pts[replay.idx].t;
+  const x = xOf(curT);
+  ctx.strokeStyle = cssVar('--danger'); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, padTop); ctx.lineTo(x, padTop+plotH); ctx.stroke();
+}
+
+function replayTick(nowMs){
+  if (!replay.playing) return;
+  if (!replay.lastWallTime) replay.lastWallTime = nowMs;
+  const dtReal = nowMs - replay.lastWallTime;
+  replay.lastWallTime = nowMs;
+  const speed = replay.speed === 0 ? 50 : replay.speed; // "Max" = fast, still visibly stepping through
+  replay.virtualT += dtReal * speed;
+
+  while (replay.idx < replay.samples.length-1 && replay.samples[replay.idx+1].t <= replay.virtualT){
+    replay.idx++;
+  }
+  renderReplayFrame();
+  if (replay.idx >= replay.samples.length-1){
+    replay.playing = false;
+    el.btnReplayPlay.textContent = '▶ Play';
+    return;
+  }
+  replay.rafId = requestAnimationFrame(replayTick);
+}
+
+el.btnReplayPlay.addEventListener('click', () => {
+  if (!replay.samples.length) return;
+  if (replay.idx >= replay.samples.length-1) { replay.idx = 0; replay.virtualT = 0; }
+  replay.playing = !replay.playing;
+  el.btnReplayPlay.textContent = replay.playing ? '⏸ Pause' : '▶ Play';
+  if (replay.playing){
+    replay.lastWallTime = 0;
+    replay.rafId = requestAnimationFrame(replayTick);
+  } else if (replay.rafId){
+    cancelAnimationFrame(replay.rafId); replay.rafId = null;
+  }
+});
+el.btnReplayRestart.addEventListener('click', () => {
+  replay.idx = 0; replay.virtualT = 0;
+  renderReplayFrame();
+});
+el.replaySeek.addEventListener('input', () => {
+  replay.playing = false; el.btnReplayPlay.textContent = '▶ Play';
+  if (replay.rafId){ cancelAnimationFrame(replay.rafId); replay.rafId = null; }
+  replay.idx = Number(el.replaySeek.value);
+  replay.virtualT = replay.samples[replay.idx] ? replay.samples[replay.idx].t : 0;
+  renderReplayFrame();
+});
+el.replaySpeed.addEventListener('change', () => { replay.speed = Number(el.replaySpeed.value); });
+el.btnReplayClose.addEventListener('click', stopReplay);
+
+el.replayFileInput.addEventListener('change', async () => {
+  const file = el.replayFileInput.files[0];
+  if (!file) return;
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data.samples) || !data.samples.length) throw new Error('No samples found in file.');
+    startReplay(data.name || file.name, data.samples);
+  } catch(err){
+    showError('Could not load recording', err.message || String(err));
+  }
+  el.replayFileInput.value = '';
+});
+
+// ---------- Keyboard shortcuts ----------
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+  if (e.key === ' '){
+    e.preventDefault();
+    (state.recording.active ? el.btnRecStop : el.btnRecStart).click();
+  } else if (e.key.toLowerCase() === 'm'){
+    e.preventDefault();
+    el.markerLabel.focus();
+  } else if (e.key.toLowerCase() === 'r'){
+    e.preventDefault();
+    el.btnReset.click();
+  }
+});
+
+// ---------- Resume previously-granted device on load ----------
+window.addEventListener('DOMContentLoaded', async () => {
+  loadRecordings();
+  renderRecordings();
+  if (!('hid' in navigator)) return;
+  const granted = await navigator.hid.getDevices();
+  if (granted.length){
+    el.btnConnect.textContent = 'Reconnect device';
+  }
+});
+
+})();
+</script>
+</body>
+</html>
